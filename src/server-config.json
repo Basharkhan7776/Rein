@@ -3,5 +3,5 @@
   "frontendPort": 3000,
   "address": "rein.local",
   "mouseInvert": true,
-  "mouseSensitivity": 2.8
+  "mouseSensitivity": 1.0
 }
