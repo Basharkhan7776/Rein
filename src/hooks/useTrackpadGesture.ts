@@ -39,6 +39,16 @@ export const useTrackpadGesture = (
     const findTouchIndex = (id: number) => ongoingTouches.current.findIndex(t => t.identifier === id);
 
     const processMovement = (sumX: number, sumY: number) => {
+        // Active drag always sends move events regardless of mode
+        if (dragging.current) {
+            send({ 
+                type: 'move', 
+                dx: Math.round(sumX * sensitivity * 10) / 10, 
+                dy: Math.round(sumY * sensitivity * 10) / 10 
+            });
+            return;
+        }
+
         const invertMult = invertScroll ? -1 : 1;
 
         if (!scrollMode && ongoingTouches.current.length === 2) {
@@ -75,7 +85,8 @@ export const useTrackpadGesture = (
                 dx: Math.round(-scrollDx * sensitivity * 10 * invertMult) / 10, 
                 dy: Math.round(-scrollDy * sensitivity * 10 * invertMult) / 10 
             });
-        } else if (ongoingTouches.current.length === 1 || dragging.current) {
+        } else if (ongoingTouches.current.length === 1) {
+            // Cursor movement (only in cursor mode with 1 finger)
             send({ 
                 type: 'move', 
                 dx: Math.round(sumX * sensitivity * 10) / 10, 
