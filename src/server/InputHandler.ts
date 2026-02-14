@@ -14,11 +14,32 @@ export interface InputMessage {
 }
 
 export class InputHandler {
+    private lastEventTime = 0;
+
     constructor() {
         mouse.config.mouseSpeed = 1000;
     }
 
     async handleMessage(msg: InputMessage) {
+        // Validation: Text length sanitation
+        if (msg.text && msg.text.length > 500) {
+            msg.text = msg.text.substring(0, 500);
+        }
+
+        // Validation: Sane bounds for coordinates
+        const MAX_COORD = 2000;
+        if (msg.dx !== undefined) msg.dx = Math.max(-MAX_COORD, Math.min(MAX_COORD, msg.dx));
+        if (msg.dy !== undefined) msg.dy = Math.max(-MAX_COORD, Math.min(MAX_COORD, msg.dy));
+
+        // Throttling: Limit high-frequency events to ~60fps (16ms)
+        if (msg.type === 'move' || msg.type === 'scroll') {
+            const now = Date.now();
+            if (now - this.lastEventTime < 16) {
+                return;
+            }
+            this.lastEventTime = now;
+        }
+
         switch (msg.type) {
             case 'move':
                 if (msg.dx !== undefined && msg.dy !== undefined) {
