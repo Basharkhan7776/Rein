@@ -42,10 +42,49 @@ function SettingsPage() {
     const [qrData, setQrData] = useState('');
 
     // Load initial state (IP is not stored in localStorage; only sensitivity, invert, theme are client settings)
+    const [authToken, setAuthToken] = useState(() => {
+        if (typeof window === 'undefined') return '';
+        return localStorage.getItem('rein_auth_token') || '';
+    });
+
     useEffect(() => {
         const defaultIp = typeof window !== 'undefined' ? window.location.hostname : 'localhost';
         setIp(defaultIp);
         setFrontendPort(String(CONFIG.FRONTEND_PORT));
+    }, []);
+
+    // Auto-generate token on settings page load (localhost only)
+    useEffect(() => {
+        if (typeof window === 'undefined') return;
+
+        // If we already have a token, no need to generate
+        const existing = localStorage.getItem('rein_auth_token');
+        if (existing) return;
+
+        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        const wsUrl = `${protocol}//${window.location.host}/ws`;
+        const socket = new WebSocket(wsUrl);
+
+        socket.onopen = () => {
+            socket.send(JSON.stringify({ type: 'generate-token' }));
+        };
+
+        socket.onmessage = (event) => {
+            try {
+                const data = JSON.parse(event.data);
+                if (data.type === 'token-generated' && data.token) {
+                    setAuthToken(data.token);
+                    localStorage.setItem('rein_auth_token', data.token);
+                    socket.close();
+                }
+            } catch (e) {
+                console.error(e);
+            }
+        };
+
+        return () => {
+            if (socket.readyState === WebSocket.OPEN) socket.close();
+        };
     }, []);
 
     // Effect: Update LocalStorage when settings change
@@ -57,35 +96,40 @@ function SettingsPage() {
         localStorage.setItem('rein_invert', JSON.stringify(invertScroll));
     }, [invertScroll]);
 
+    // Effect: Theme
     useEffect(() => {
         if (typeof window === 'undefined') return;
         localStorage.setItem(APP_CONFIG.THEME_STORAGE_KEY, theme);
         document.documentElement.setAttribute('data-theme', theme);
     }, [theme]);
 
-    // Generate QR when IP changes (IP is not persisted to localStorage)
+    // Generate QR when IP changes or Token changes
     useEffect(() => {
         if (!ip || typeof window === 'undefined') return;
         const appPort = String(CONFIG.FRONTEND_PORT);
         const protocol = window.location.protocol;
-        const shareUrl = `${protocol}//${ip}:${appPort}/trackpad`;
+        let shareUrl = `${protocol}//${ip}:${appPort}/trackpad`;
+
+        // Token is embedded in the URL — QR automatically includes it
+        if (authToken) {
+            shareUrl += `?token=${encodeURIComponent(authToken)}`;
+        }
+
         QRCode.toDataURL(shareUrl)
             .then(setQrData)
             .catch((e) => console.error('QR Error:', e));
-    }, [ip]);
+    }, [ip, authToken]);
 
     // Effect: Auto-detect LAN IP from Server (only if on localhost)
     useEffect(() => {
         if (typeof window === 'undefined') return;
         if (window.location.hostname !== 'localhost') return;
 
-        console.log('Attempting to auto-detect IP...');
         const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
         const wsUrl = `${protocol}//${window.location.host}/ws`;
         const socket = new WebSocket(wsUrl);
 
         socket.onopen = () => {
-            console.log('Connected to local server for IP detection');
             socket.send(JSON.stringify({ type: 'get-ip' }));
         };
 
@@ -93,7 +137,6 @@ function SettingsPage() {
             try {
                 const data = JSON.parse(event.data);
                 if (data.type === 'server-ip' && data.ip) {
-                    console.log('Auto-detected IP:', data.ip);
                     setIp(data.ip);
                     socket.close();
                 }
@@ -161,6 +204,7 @@ function SettingsPage() {
                                 <span>Slow</span>
                                 <span>Default</span>
                                 <span>Fast</span>
+
                             </div>
                         </div>
 
