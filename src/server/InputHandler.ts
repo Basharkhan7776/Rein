@@ -68,7 +68,9 @@ export class InputHandler {
                         if (this.pendingScroll) {
                             const pending = this.pendingScroll;
                             this.pendingScroll = null;
-                            this.handleMessage(pending);
+                            this.handleMessage(pending).catch((err) => {
+                                 console.error('Error processing pending move event:', err);
+                             });
                         }
                     }, 8);
                 }
