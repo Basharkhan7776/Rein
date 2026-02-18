@@ -53,7 +53,7 @@ Fixes #(issue number)
 
 - [ ] Voice input: Verified speech-to-text functionality.
 
-### Other
+### Any other gesture or input behavior introduced:
 
 - [ ] New Gestures: Verified any other gesture or input behavior introduced in this PR.
 
