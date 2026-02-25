@@ -1,9 +1,9 @@
 import { useRef, useState } from "react"
 import {
-	calculateAccelerationMult,
 	PINCH_THRESHOLD,
 	TOUCH_MOVE_THRESHOLD,
 	TOUCH_TIMEOUT,
+	calculateAccelerationMult,
 } from "../utils/math"
 
 interface TrackedTouch {
@@ -24,9 +24,9 @@ const getTouchDistance = (a: TrackedTouch, b: TrackedTouch): number => {
 export const useTrackpadGesture = (
 	send: (msg: unknown) => void,
 	scrollMode: boolean,
-	sensitivity: number = 1.5,
-	invertScroll: boolean = false,
-	axisThreshold: number = 2.5,
+	sensitivity = 1.5,
+	invertScroll = false,
+	axisThreshold = 2.5,
 ) => {
 	const [isTracking, setIsTracking] = useState(false)
 

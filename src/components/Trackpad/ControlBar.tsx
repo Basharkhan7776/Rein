@@ -1,5 +1,5 @@
-import type React from "react"
 import type { ModifierState } from "@/types"
+import type React from "react"
 
 interface ControlBarProps {
 	scrollMode: boolean
@@ -31,7 +31,7 @@ export const ControlBar: React.FC<ControlBarProps> = ({
 		switch (modifier) {
 			case "Active":
 				if (buffer.length > 0) return "btn-success"
-				else return "btn-warning"
+				return "btn-warning"
 			case "Hold":
 				return "btn-warning"
 			default:
@@ -43,7 +43,7 @@ export const ControlBar: React.FC<ControlBarProps> = ({
 		switch (modifier) {
 			case "Active":
 				if (buffer.length > 0) return "Press"
-				else return "Release"
+				return "Release"
 			case "Hold":
 				return "Release"
 			case "Release":

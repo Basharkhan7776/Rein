@@ -1,9 +1,9 @@
 import {
-	createRootRoute,
 	HeadContent,
 	Link,
 	Outlet,
 	Scripts,
+	createRootRoute,
 } from "@tanstack/react-router"
 // import { TanStackRouterDevtools } from '@tanstack/react-router-devtools'
 import { useEffect } from "react"

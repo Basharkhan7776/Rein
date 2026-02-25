@@ -1,4 +1,4 @@
-import { Button, Key, keyboard, mouse, Point } from "@nut-tree-fork/nut-js"
+import { Button, Key, Point, keyboard, mouse } from "@nut-tree-fork/nut-js"
 import { KEY_MAP } from "./KeyMap"
 
 export interface InputMessage {
@@ -232,7 +232,7 @@ export class InputHandler {
 						return
 					}
 
-					console.log(`Pressing keys:`, nutKeys)
+					console.log("Pressing keys:", nutKeys)
 					const pressedKeys: Key[] = []
 
 					try {

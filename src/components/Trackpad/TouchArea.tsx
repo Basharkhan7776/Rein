@@ -44,7 +44,7 @@ export const TouchArea: React.FC<TouchAreaProps> = ({
 				<div className="text-4xl mb-2 opacity-20">
 					{scrollMode ? "Scroll Mode" : "Touch Area"}
 				</div>
-				{isTracking && <div className="loading loading-ring loading-lg"></div>}
+				{isTracking && <div className="loading loading-ring loading-lg" />}
 			</div>
 
 			{scrollMode && (

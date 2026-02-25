@@ -1,7 +1,7 @@
-import { createFileRoute } from "@tanstack/react-router"
-import { useRef, useState } from "react"
 import { BufferBar } from "@/components/Trackpad/Buffer"
 import type { ModifierState } from "@/types"
+import { createFileRoute } from "@tanstack/react-router"
+import { useRef, useState } from "react"
 import { ControlBar } from "../components/Trackpad/ControlBar"
 import { ExtraKeys } from "../components/Trackpad/ExtraKeys"
 import { TouchArea } from "../components/Trackpad/TouchArea"
@@ -25,7 +25,7 @@ function TrackpadPage() {
 	const [sensitivity] = useState(() => {
 		if (typeof window === "undefined") return 1.0
 		const s = localStorage.getItem("rein_sensitivity")
-		return s ? parseFloat(s) : 1.0
+		return s ? Number.parseFloat(s) : 1.0
 	})
 
 	const [invertScroll] = useState(() => {
@@ -173,10 +173,11 @@ function TrackpadPage() {
 
 		if (modifier === "Hold") {
 			const comboKeys = [...buffer, key]
-			console.log(`Sending combo:`, comboKeys)
+			console.log("Sending combo:", comboKeys)
 			sendCombo(comboKeys)
 			return
-		} else if (modifier === "Active") {
+		}
+		if (modifier === "Active") {
 			setBuffer((prev) => [...prev, key])
 			return
 		}

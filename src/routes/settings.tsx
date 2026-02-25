@@ -28,7 +28,7 @@ function SettingsPage() {
 	const [sensitivity, setSensitivity] = useState(() => {
 		if (typeof window === "undefined") return 1.0
 		const saved = localStorage.getItem("rein_sensitivity")
-		const parsed = saved ? parseFloat(saved) : NaN
+		const parsed = saved ? Number.parseFloat(saved) : Number.NaN
 		return Number.isFinite(parsed) ? parsed : 1.0
 	})
 
@@ -189,7 +189,9 @@ function SettingsPage() {
 								max="3.0"
 								step="0.1"
 								value={sensitivity}
-								onChange={(e) => setSensitivity(parseFloat(e.target.value))}
+								onChange={(e) =>
+									setSensitivity(Number.parseFloat(e.target.value))
+								}
 								className="range range-primary range-sm w-full"
 							/>
 
@@ -304,7 +306,7 @@ function SettingsPage() {
 							className="btn btn-primary w-full rounded-md"
 							disabled={!serverConfigChanged}
 							onClick={() => {
-								const port = parseInt(frontendPort, 10)
+								const port = Number.parseInt(frontendPort, 10)
 								if (!Number.isFinite(port) || port < 1 || port > 65535) {
 									alert("Please enter a valid port number (1–65535).")
 									return
