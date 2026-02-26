@@ -9,268 +9,209 @@ import { useRemoteConnection } from "../hooks/useRemoteConnection"
 import { useTrackpadGesture } from "../hooks/useTrackpadGesture"
 
 export const Route = createFileRoute("/trackpad")({
-	component: TrackpadPage,
+    component: TrackpadPage,
 })
 
 function TrackpadPage() {
-	const [scrollMode, setScrollMode] = useState(false)
-	const [modifier, setModifier] = useState<ModifierState>("Release")
-	const [buffer, setBuffer] = useState<string[]>([])
-	const bufferText = buffer.join(" + ")
-	const hiddenInputRef = useRef<HTMLInputElement>(null)
-	const isComposingRef = useRef(false)
-	const prevCompositionDataRef = useRef("")
+    const [scrollMode, setScrollMode] = useState(false);
+    const [modifier, setModifier] = useState<ModifierState>("Release");
+    const [buffer, setBuffer] = useState<string[]>([]);
+    const bufferText = buffer.join(" + ");
+    const hiddenInputRef = useRef<HTMLInputElement>(null);
 
-	// Load Client Settings
-	const [sensitivity] = useState(() => {
-		if (typeof window === "undefined") return 1.0
-		const s = localStorage.getItem("rein_sensitivity")
-		return s ? Number.parseFloat(s) : 1.0
-	})
+    // Load Client Settings
+    const [sensitivity] = useState(() => {
+        if (typeof window === 'undefined') return 1.0;
+        const s = localStorage.getItem('rein_sensitivity');
+        return s ? parseFloat(s) : 1.0;
+    });
 
-	const [invertScroll] = useState(() => {
-		if (typeof window === "undefined") return false
-		const s = localStorage.getItem("rein_invert")
-		return s ? JSON.parse(s) : false
-	})
+    const [invertScroll] = useState(() => {
+        if (typeof window === 'undefined') return false;
+        const s = localStorage.getItem('rein_invert');
+        return s ? JSON.parse(s) : false;
+    });
 
-	const { status, send, sendCombo } = useRemoteConnection()
-	// Pass sensitivity and invertScroll to the gesture hook
-	const { isTracking, handlers } = useTrackpadGesture(
-		send,
-		scrollMode,
-		sensitivity,
-		invertScroll,
-	)
+    const { status, send, sendCombo } = useRemoteConnection();
+    // Pass sensitivity and invertScroll to the gesture hook
+    const { isTracking, handlers } = useTrackpadGesture(send, scrollMode, sensitivity, invertScroll);
 
-	const focusInput = () => {
-		hiddenInputRef.current?.focus()
-	}
+    const focusInput = () => {
+        hiddenInputRef.current?.focus();
+    };
 
-	const handleClick = (button: "left" | "right") => {
-		send({ type: "click", button, press: true })
-		// Release after short delay to simulate click
-		setTimeout(() => send({ type: "click", button, press: false }), 50)
-	}
+    const handleClick = (button: 'left' | 'right') => {
+        send({ type: 'click', button, press: true });
+        // Release after short delay to simulate click
+        setTimeout(() => send({ type: 'click', button, press: false }), 50);
+    };
 
-	const processCompositionDiff = (currentData: string, prevData: string) => {
-		if (currentData === prevData) return
+    const handleInput = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const nativeEvent = e.nativeEvent as InputEvent;
+        const inputType = nativeEvent.inputType;
+        const data = nativeEvent.data;
+        const val = e.target.value;
 
-		// Find common prefix length
-		let commonLen = 0
-		while (
-			commonLen < prevData.length &&
-			commonLen < currentData.length &&
-			prevData[commonLen] === currentData[commonLen]
-		) {
-			commonLen++
-		}
+        // Synchronous Reset: Reset the input immediately to prevent buffer accumulation
+        const resetInput = () => {
+            if (hiddenInputRef.current) {
+                hiddenInputRef.current.value = ' ';
+                hiddenInputRef.current.setSelectionRange(1, 1);
+            }
+        };
 
-		// Send backspaces for removed/changed characters
-		const deletions = prevData.length - commonLen
-		for (let i = 0; i < deletions; i++) {
-			send({ type: "key", key: "backspace" })
-		}
+        // 1. Explicit Backspace Detection
+        if (inputType === 'deleteContentBackward' || val.length === 0) {
+            send({ type: 'key', key: 'backspace' });
+            resetInput();
+            return;
+        }
 
-		// Send new characters individually
-		const newChars = currentData.slice(commonLen)
-		for (const char of newChars) {
-			if (modifier !== "Release") {
-				handleModifier(char)
-			} else {
-				send({ type: "text", text: char })
-			}
-		}
-	}
+        // 2. Explicit New Line / Enter
+        if (inputType === 'insertLineBreak' || inputType === 'insertParagraph') {
+            send({ type: 'key', key: 'enter' });
+            resetInput();
+            return;
+        }
 
-	const handleCompositionStart = () => {
-		isComposingRef.current = true
-		prevCompositionDataRef.current = ""
-	}
+        // 3. Handle Text Insertion
+        const textToSend = data || (val.length > 1 ? val.slice(1) : null);
 
-	const handleCompositionUpdate = (
-		e: React.CompositionEvent<HTMLInputElement>,
-	) => {
-		const currentData = e.data || ""
-		processCompositionDiff(currentData, prevCompositionDataRef.current)
-		prevCompositionDataRef.current = currentData
-	}
+        if (textToSend) {
+            if (modifier !== "Release") {
+                handleModifier(textToSend);
+            } else {
+                // Map space character to the 'space' key command specifically
+                if (textToSend === ' ') {
+                    send({ type: 'key', key: 'space' });
+                } else {
+                    send({ type: 'text', text: textToSend });
+                }
+            }
+        }
 
-	const handleCompositionEnd = (
-		e: React.CompositionEvent<HTMLInputElement>,
-	) => {
-		const currentData = e.data || ""
-		processCompositionDiff(currentData, prevCompositionDataRef.current)
-		prevCompositionDataRef.current = ""
+        resetInput();
+    };
 
-		// Clear input to prevent buffer accumulation
-		if (hiddenInputRef.current) {
-			hiddenInputRef.current.value = ""
-		}
+    const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+        const key = e.key.toLowerCase();
 
-		// Delay flag reset so the onChange firing after compositionend is suppressed
-		setTimeout(() => {
-			isComposingRef.current = false
-		}, 0)
-	}
+        // 1. Enter key fallback
+        if (key === 'enter') {
+            send({ type: 'key', key: 'enter' });
+            if (hiddenInputRef.current) {
+                hiddenInputRef.current.value = ' ';
+            }
+            return;
+        }
 
-	const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-		// Skip during IME composition — composition handlers manage input
-		if (e.nativeEvent.isComposing || isComposingRef.current) return
+        // 2. Modifier Logic
+        if (modifier !== "Release") {
+            if (key === 'escape') {
+                e.preventDefault();
+                setModifier("Release");
+                setBuffer([]);
+                return;
+            }
+            if (key.length > 1 && key !== 'unidentified' && key !== 'backspace') {
+                e.preventDefault();
+                handleModifier(key);
+                return;
+            }
+        }
 
-		const key = e.key.toLowerCase()
+        // 3. Special keys (Arrows, Tab, etc.)
+        if (key.length > 1 && key !== 'unidentified' && key !== 'backspace' && key !== 'process') {
+            send({ type: 'key', key });
+        }
+    };
 
-		if (modifier !== "Release") {
-			if (key === "backspace") {
-				e.preventDefault()
-				setBuffer((prev) => prev.slice(0, -1))
-				return
-			}
-			if (key === "escape") {
-				e.preventDefault()
-				setModifier("Release")
-				setBuffer([])
-				return
-			}
-			if (key !== "unidentified" && key.length > 1) {
-				e.preventDefault()
-				handleModifier(key)
-			}
-			return
-		}
-		if (key === "backspace") send({ type: "key", key: "backspace" })
-		else if (key === "enter") send({ type: "key", key: "enter" })
-		else if (key !== "unidentified" && key.length > 1) {
-			send({ type: "key", key })
-		}
-	}
+    const handleModifierState = () => {
+        switch (modifier) {
+            case "Active":
+                if (buffer.length > 0) setModifier("Hold");
+                else setModifier("Release");
+                break;
+            case "Hold":
+                setModifier("Release");
+                setBuffer([]);
+                break;
+            case "Release":
+                setModifier("Active");
+                setBuffer([]);
+                break;
+        }
+    };
 
-	const handleModifierState = () => {
-		switch (modifier) {
-			case "Active":
-				if (buffer.length > 0) {
-					setModifier("Hold")
-				} else {
-					setModifier("Release")
-				}
-				break
-			case "Hold":
-				setModifier("Release")
-				setBuffer([])
-				break
-			case "Release":
-				setModifier("Active")
-				setBuffer([])
-				break
-		}
-	}
+    const handleModifier = (key: string) => {
+        if (modifier === "Hold") {
+            const comboKeys = [...buffer, key];
+            sendCombo(comboKeys);
+        } else if (modifier === "Active") {
+            setBuffer(prev => [...prev, key]);
+        }
+    };
 
-	const handleModifier = (key: string) => {
-		console.log(
-			`handleModifier called with key: ${key}, current modifier: ${modifier}, buffer:`,
-			buffer,
-		)
+    const handleContainerClick = (e: React.MouseEvent) => {
+        if (e.target === e.currentTarget) {
+            e.preventDefault();
+            focusInput();
+        }
+    };
 
-		if (modifier === "Hold") {
-			const comboKeys = [...buffer, key]
-			console.log("Sending combo:", comboKeys)
-			sendCombo(comboKeys)
-			return
-		}
-		if (modifier === "Active") {
-			setBuffer((prev) => [...prev, key])
-			return
-		}
-	}
+    return (
+        <div
+            className="flex flex-col h-full overflow-hidden"
+            onClick={handleContainerClick}
+        >
+            {/* Touch Surface */}
+            <TouchArea
+                isTracking={isTracking}
+                scrollMode={scrollMode}
+                handlers={handlers}
+                status={status}
+            />
+            {bufferText !== "" && <BufferBar bufferText={bufferText} />}
 
-	const sendText = (val: string) => {
-		if (!val) return
-		const toSend = val.length > 1 ? `${val} ` : val
-		send({ type: "text", text: toSend })
-	}
+            {/* Controls */}
+            <ControlBar
+                scrollMode={scrollMode}
+                modifier={modifier}
+                buffer={buffer.join(" + ")}
+                onToggleScroll={() => setScrollMode(!scrollMode)}
+                onLeftClick={() => handleClick('left')}
+                onRightClick={() => handleClick('right')}
+                onKeyboardToggle={focusInput}
+                onModifierToggle={handleModifierState}
+            />
 
-	const handleInput = (e: React.ChangeEvent<HTMLInputElement>) => {
-		if (isComposingRef.current) return // Skip during IME composition
-		const val = e.target.value
-		if (val) {
-			e.target.value = ""
-			if (modifier !== "Release") {
-				handleModifier(val)
-			} else {
-				sendText(val)
-			}
-		}
-	}
+            {/* Extra Keys */}
+            <ExtraKeys
+                sendKey={(k) => {
+                    if (modifier !== "Release") handleModifier(k);
+                    else send({ type: 'key', key: k });
+                }}
+                onInputFocus={focusInput}
+            />
 
-	const handleContainerClick = (
-		e: React.MouseEvent<HTMLDivElement> | React.KeyboardEvent<HTMLDivElement>,
-	) => {
-		if (e.target === e.currentTarget) {
-			e.preventDefault()
-			focusInput()
-		}
-	}
-
-	return (
-		// biome-ignore lint/a11y/useSemanticElements: layout container intentionally not a button
-		<div
-			role="button"
-			tabIndex={0}
-			className="flex flex-col h-full overflow-hidden"
-			onClick={handleContainerClick}
-			onKeyDown={(e) => {
-				if (e.key === "Enter" || e.key === " ") {
-					handleContainerClick(e)
-				}
-			}}
-		>
-			{/* Touch Surface */}
-			<TouchArea
-				isTracking={isTracking}
-				scrollMode={scrollMode}
-				handlers={handlers}
-				status={status}
-			/>
-			{bufferText !== "" && <BufferBar bufferText={bufferText} />}
-
-			{/* Controls */}
-			<ControlBar
-				scrollMode={scrollMode}
-				modifier={modifier}
-				buffer={buffer.join(" + ")}
-				onToggleScroll={() => setScrollMode(!scrollMode)}
-				onLeftClick={() => handleClick("left")}
-				onRightClick={() => handleClick("right")}
-				onKeyboardToggle={focusInput}
-				onModifierToggle={handleModifierState}
-			/>
-
-			{/* Extra Keys */}
-			<ExtraKeys
-				sendKey={(k) => {
-					if (modifier !== "Release") handleModifier(k)
-					else send({ type: "key", key: k })
-				}}
-				onInputFocus={focusInput}
-			/>
-
-			{/* Hidden Input for Mobile Keyboard */}
-			<input
-				ref={hiddenInputRef}
-				className="opacity-0 absolute bottom-0 pointer-events-none h-0 w-0"
-				onKeyDown={handleKeyDown}
-				onChange={handleInput}
-				onCompositionStart={handleCompositionStart}
-				onCompositionUpdate={handleCompositionUpdate}
-				onCompositionEnd={handleCompositionEnd}
-				onBlur={() => {
-					setTimeout(() => hiddenInputRef.current?.focus(), 10)
-				}}
-				autoComplete="off"
-				autoCorrect="off"
-				autoCapitalize="off"
-				spellCheck={false}
-			/>
-		</div>
-	)
+            {/* Hidden Input for Mobile Keyboard */}
+            <input
+                ref={hiddenInputRef}
+                className="opacity-0 absolute bottom-0 pointer-events-none h-0 w-0"
+                defaultValue=" "
+                onKeyDown={handleKeyDown}
+                onChange={handleInput}
+                onBlur={() => {
+                    setTimeout(() => hiddenInputRef.current?.focus(), 10);
+                }}
+                autoComplete="off"
+                autoCorrect="off"
+                autoCapitalize="off"
+                spellCheck={false}
+                inputMode="text"
+                enterKeyHint="enter"
+                autoFocus
+            />
+        </div>
+    );
 }
