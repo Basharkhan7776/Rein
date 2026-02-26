@@ -18,7 +18,6 @@ import { MdSpaceBar } from "react-icons/md"
 
 interface ExtraKeysProps {
 	sendKey: (key: string) => void
-	onInputFocus?: () => void
 }
 
 export const ExtraKeys: React.FC<ExtraKeysProps> = ({ sendKey }) => {
