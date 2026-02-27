@@ -23,6 +23,7 @@ export class InputHandler {
 	private scrollTimer: ReturnType<typeof setTimeout> | null = null;
 	private throttleMs: number;
 	private ydotoolCursor: YdotoolCursor;
+	private isProcessingMove = false;
 
 	constructor(throttleMs = 8) {
 		mouse.config.mouseSpeed = 1000;
@@ -31,6 +32,10 @@ export class InputHandler {
 	}
 
 	setThrottleMs(ms: number) {
+		if (!Number.isFinite(ms) || ms < 0) {
+			console.warn(`[InputHandler] Invalid throttleMs value: ${ms}, ignoring`);
+			return;
+		}
 		this.throttleMs = ms;
 	}
 
@@ -52,23 +57,26 @@ export class InputHandler {
 		// Throttling: Limit high-frequency events to ~125fps (8ms)
 		if (msg.type === "move") {
 			const now = Date.now();
-			if (now - this.lastMoveTime < this.throttleMs) {
+			if (this.isProcessingMove || now - this.lastMoveTime < this.throttleMs) {
 				this.pendingMove = msg;
 				if (!this.moveTimer) {
-					this.moveTimer = setTimeout(() => {
+					this.moveTimer = setTimeout(async () => {
 						this.moveTimer = null;
 						if (this.pendingMove) {
 							const pending = this.pendingMove;
 							this.pendingMove = null;
-							this.handleMessage(pending).catch((err) => {
-								console.error("Error processing pending move event:", err);
-							});
+							this.isProcessingMove = true;
+							try {
+								await this.handleMessage(pending);
+							} finally {
+								this.lastMoveTime = Date.now();
+								this.isProcessingMove = false;
+							}
 						}
 					}, this.throttleMs);
 				}
 				return;
 			}
-			this.lastMoveTime = now;
 		} else if (msg.type === "scroll") {
 			const now = Date.now();
 			if (now - this.lastScrollTime < this.throttleMs) {
@@ -98,22 +106,40 @@ export class InputHandler {
 					Number.isFinite(msg.dx) &&
 					Number.isFinite(msg.dy)
 				) {
-					if (this.ydotoolCursor.isAvailable()) {
-						console.log(
-							`[InputHandler] Using ydotool for move: dx=${msg.dx}, dy=${msg.dy}`,
-						);
-						await this.ydotoolCursor.move(msg.dx, msg.dy);
-					} else {
-						console.log(
-							`[InputHandler] Using nut.js for move: dx=${msg.dx}, dy=${msg.dy}`,
-						);
-						const currentPos = await mouse.getPosition();
-						await mouse.setPosition(
-							new Point(
-								Math.round(currentPos.x + msg.dx),
-								Math.round(currentPos.y + msg.dy),
-							),
-						);
+					this.isProcessingMove = true;
+					try {
+						if (this.ydotoolCursor.isAvailable()) {
+							console.log(
+								`[InputHandler] Using ydotool for move: dx=${msg.dx}, dy=${msg.dy}`,
+							);
+							const ok = await this.ydotoolCursor.move(msg.dx, msg.dy);
+							if (!ok) {
+								console.warn(
+									"[InputHandler] ydotool move failed, falling back to nut.js",
+								);
+								const currentPos = await mouse.getPosition();
+								await mouse.setPosition(
+									new Point(
+										Math.round(currentPos.x + msg.dx),
+										Math.round(currentPos.y + msg.dy),
+									),
+								);
+							}
+						} else {
+							console.log(
+								`[InputHandler] Using nut.js for move: dx=${msg.dx}, dy=${msg.dy}`,
+							);
+							const currentPos = await mouse.getPosition();
+							await mouse.setPosition(
+								new Point(
+									Math.round(currentPos.x + msg.dx),
+									Math.round(currentPos.y + msg.dy),
+								),
+							);
+						}
+					} finally {
+						this.lastMoveTime = Date.now();
+						this.isProcessingMove = false;
 					}
 				}
 				break;

@@ -33,9 +33,7 @@ export class YdotoolCursor {
 			);
 		} catch (error) {
 			console.error("[YdotoolCursor] Failed to get initial position:", error);
-			this.trackX = 0;
-			this.trackY = 0;
-			this.initialized = true;
+			this.available = false;
 		}
 	}
 
@@ -81,10 +79,16 @@ export class YdotoolCursor {
 		}
 
 		if (sessionType === "wayland" || waylandDisplay) {
-			console.log(
-				"[YdotoolCursor] Wayland detected, using ydotool with absolute coordinates",
-			);
-			return true;
+			try {
+				require("child_process").execSync("which ydotool", { stdio: "ignore" });
+				console.log("[YdotoolCursor] Wayland detected, ydotool found in PATH");
+				return true;
+			} catch {
+				console.warn(
+					"[YdotoolCursor] Wayland detected but ydotool not found in PATH",
+				);
+				return false;
+			}
 		}
 
 		if (sessionType === "x11") {
